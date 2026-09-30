@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Administration Distante - Multi-Machines & Sécurité</title>
+  <!-- xterm.js Styles -->
+  <link rel="stylesheet" href="/vendor/xterm-css/xterm.css">
+  <!-- Application Styles -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- Application Header -->
+  <header class="app-header">
+    <div class="logo-area">
+      <div class="logo-icon">⚡</div>
+      <div class="logo-title">RemoteAdmin</div>
+      <span class="system-badge" id="badge-platform">
+        <span class="dot green"></span> Connexion active
+      </span>
+    </div>
+
+    <!-- Global Machine Selector -->
+    <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <span style="font-size: 0.85rem; color: var(--text-secondary);">Cible :</span>
+      <select id="global-machine-select" class="input-text" style="width: auto; padding: 0.35rem 0.6rem; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+        <option value="local">📍 Serveur Principal (Local)</option>
+      </select>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabs">
+      <button class="nav-tab active" data-tab="overview">
+        📊 Tableau de bord
+      </button>
+      <button class="nav-tab" data-tab="terminal">
+        💻 Terminal Web
+      </button>
+      <button class="nav-tab" data-tab="commands">
+        ⌨️ Commandes Shell
+      </button>
+      <button class="nav-tab" data-tab="actions">
+        ⚡ Actions & Services
+      </button>
+      <button class="nav-tab" data-tab="machines">
+        🖥️ Machines Réseau
+      </button>
+      <button class="nav-tab" data-tab="tunnels">
+        🌐 Tunnels Web
+      </button>
+      <button class="nav-tab" data-tab="files">
+        📂 Fichiers & Logs
+      </button>
+      <button class="nav-tab" data-tab="audit">
+        📜 Journal d'audit
+      </button>
+    </nav>
+
+    <!-- User / Session Controls -->
+    <div class="user-status">
+      <button class="btn btn-danger" onclick="Auth.logout()">
+        🚪 Déconnexion
+      </button>
+    </div>
+  </header>
+
+  <!-- Application Content Body -->
+  <main class="app-main">
+
+    <!-- TAB 1: OVERVIEW -->
+    <section id="tab-overview" class="tab-pane active">
+      <!-- Host Specs Banner -->
+      <div class="host-banner">
+        <div class="host-details">
+          <div class="host-item">
+            <span class="host-label">Machine (Hostname / IP)</span>
+            <span class="host-val" id="info-hostname">-</span>
+          </div>
+          <div class="host-item">
+            <span class="host-label">Système d'exploitation</span>
+            <span class="host-val" id="info-distro">-</span>
+          </div>
+          <div class="host-item">
+            <span class="host-label">Processeur (CPU)</span>
+            <span class="host-val" id="info-cpu">-</span>
+          </div>
+          <div class="host-item">
+            <span class="host-label">Architecture / Kernel</span>
+            <span class="host-val" id="info-arch">-</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-time Metrics Grid -->
+      <div class="grid-cards">
+        <!-- CPU Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Charge Processeur</span>
+            <span style="font-size: 1.2rem;">⚡</span>
+          </div>
+          <div class="metric-value" id="metric-cpu-val">0%</div>
+          <div class="metric-sub">Activité globale du processeur</div>
+          <div class="progress-bar-bg">
+            <div id="metric-cpu-bar" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <!-- RAM Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Mémoire Vive (RAM)</span>
+            <span style="font-size: 1.2rem;">🧠</span>
+          </div>
+          <div class="metric-value" id="metric-mem-val">0%</div>
+          <div class="metric-sub" id="metric-mem-sub">0 GB / 0 GB</div>
+          <div class="progress-bar-bg">
+            <div id="metric-mem-bar" class="progress-bar-fill" style="width: 0%;"></div>
+          </div>
+        </div>
+
+        <!-- Network Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Trafic Réseau</span>
+            <span style="font-size: 1.2rem;">🌐</span>
+          </div>
+          <div class="metric-value" id="metric-net-val">↓ 0 KB/s</div>
+          <div class="metric-sub" id="metric-net-sub">↑ 0 KB/s</div>
+        </div>
+
+        <!-- Uptime Card -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Temps de fonctionnement</span>
+            <span style="font-size: 1.2rem;">⏱️</span>
+          </div>
+          <div class="metric-value" id="metric-uptime-val">-</div>
+          <div class="metric-sub">Sans interruption</div>
+        </div>
+      </div>
+
+      <!-- Disks & Storage -->
+      <div class="card" style="margin-bottom: 1.5rem;">
+        <div class="card-header">
+          <span class="card-title">Stockage & Partitions Disques</span>
+        </div>
+        <div id="disks-container">
+          <span style="color: var(--text-secondary); font-size: 0.9rem;">Chargement des données disques...</span>
+        </div>
+      </div>
+
+      <!-- Processes List -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Top Processus Actifs</span>
+          <button class="btn" onclick="Dashboard.loadProcesses()">🔄 Actualiser</button>
+        </div>
+        <div class="table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>PID</th>
+                <th>Nom du processus</th>
+                <th>CPU %</th>
+                <th>Mémoire %</th>
+                <th>Utilisateur</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="process-table-body">
+              <tr><td colspan="6" style="text-align:center;">Chargement...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: TERMINAL WEB -->
+    <section id="tab-terminal" class="tab-pane">
+      <div class="terminal-wrapper">
+        <div class="terminal-header">
+          <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem;">
+            <span class="dot green"></span>
+            <strong>Shell Interactif (PTY / SSH)</strong>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn" onclick="TerminalManager.clear()">🧹 Effacer</button>
+            <button class="btn" onclick="TerminalManager.reconnect()">🔄 Reconnecter</button>
+          </div>
+        </div>
+        <div id="terminal-container" class="terminal-container"></div>
+      </div>
+    </section>
+
+    <!-- TAB 3: COMMAND RUNNER -->
+    <section id="tab-commands" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Exécution de Commandes Rapides (Shell direct)</span>
+        </div>
+        <div class="command-console">
+          <div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Commandes fréquentes prédéfinies :</div>
+            <div class="preset-pills" id="command-presets"></div>
+          </div>
+
+          <div class="command-bar">
+            <input type="text" id="command-input" class="input-text" placeholder="Entrez une commande (ex: df -h, docker ps, uname -a)..." />
+            <button class="btn btn-primary" onclick="Actions.runCommand()">Exécuter</button>
+          </div>
+
+          <div>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">Sortie de la commande :</div>
+            <pre id="command-output" class="console-output">[En attente d'une commande...]</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: ACTIONS & SERVICES -->
+    <section id="tab-actions" class="tab-pane">
+      <!-- Power Management Card -->
+      <div class="card" style="margin-bottom: 1.5rem; border-color: rgba(218, 54, 51, 0.4);">
+        <div class="card-header">
+          <span class="card-title" style="color: #f85149;">Gestion de l'Alimentation Système</span>
+        </div>
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem;">
+          <button class="btn btn-danger" style="padding: 0.75rem 1.25rem; font-size: 0.95rem;" onclick="Actions.promptReboot()">
+            🔄 Redémarrer la machine
+          </button>
+          <button class="btn btn-danger" style="padding: 0.75rem 1.25rem; font-size: 0.95rem;" onclick="Actions.promptShutdown()">
+            🛑 Arrêter la machine (Shutdown)
+          </button>
+          <button class="btn" style="padding: 0.75rem 1.25rem; font-size: 0.95rem;" onclick="Actions.cancelShutdown()">
+            ↩️ Annuler l'arrêt programmé
+          </button>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-secondary);">
+          🔒 <em>Ces actions sensibles nécessitent la saisie de votre mot de passe administrateur pour confirmation.</em>
+        </p>
+      </div>
+
+      <!-- Services Manager -->
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Gestionnaire de Services (Systemd)</span>
+          <div style="display: flex; gap: 0.5rem;">
+            <input type="text" id="custom-service-name" class="input-text" style="width: 200px; padding: 0.35rem 0.6rem; font-size: 0.85rem;" placeholder="Nom de service..." />
+            <button class="btn" onclick="Actions.queryCustomService()">Interroger</button>
+            <button class="btn" onclick="Actions.loadServices()">🔄 Actualiser</button>
+          </div>
+        </div>
+        <div id="services-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem;">
+          <span style="color: var(--text-secondary); font-size: 0.9rem;">Chargement des services...</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: MACHINES RESEAU -->
+    <section id="tab-machines" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <span class="card-title">Parc de Machines du Réseau (Inventaire)</span>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+              Gérez plusieurs serveurs et postes distants via SSH et Wake-on-LAN.
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="Machines.showAddModal()">
+            ➕ Ajouter une machine distante
+          </button>
+        </div>
+
+        <div id="machines-list-container" style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
+          <span style="color: var(--text-secondary);">Chargement du parc de machines...</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB: TUNNELS & EXPOSITION WEB -->
+    <section id="tab-tunnels" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <span class="card-title">Tunnels & Exposition Web (Cloudflare / AutoSSH)</span>
+            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem;">
+              Exposez facilement vos services locaux sur le web mondial sans redirection de ports ni IP publique fixe.
+            </div>
+          </div>
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="Tunnels.showCloudflareModal()">
+              ☁️ Nouveau Tunnel Cloudflare
+            </button>
+            <button class="btn" onclick="Tunnels.showAutoSshModal()">
+              🔀 Nouveau Tunnel AutoSSH
+            </button>
+            <button class="btn" onclick="Tunnels.loadTunnels()">🔄 Actualiser</button>
+          </div>
+        </div>
+
+        <div id="tunnels-list-container" style="display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem;">
+          <span style="color: var(--text-secondary);">Chargement des tunnels...</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: FILES EXPLORER -->
+    <section id="tab-files" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <button class="btn" onclick="FileExplorer.navigateUp()">⬆️ Dossier parent</button>
+            <span style="font-family: var(--font-mono); font-size: 0.9rem; color: var(--accent);" id="files-current-path">/</span>
+          </div>
+          <div>
+            <label class="btn btn-primary" style="cursor: pointer;">
+              📤 Téléverser un fichier
+              <input type="file" style="display: none;" onchange="FileExplorer.uploadFile(this)" />
+            </label>
+          </div>
+        </div>
+        <div class="table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Taille</th>
+                <th>Permissions</th>
+                <th>Dernière modification</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="files-table-body">
+              <tr><td colspan="5" style="text-align: center;">Chargement...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 7: AUDIT TRAIL -->
+    <section id="tab-audit" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Journal d'Audit des Actions</span>
+          <button class="btn" onclick="Actions.loadAuditLogs()">🔄 Actualiser</button>
+        </div>
+        <div class="table-container">
+          <table class="admin-table">
+            <thead>
+              <tr>
+                <th>Heure</th>
+                <th>Adresse IP</th>
+                <th>Utilisateur</th>
+                <th>Action</th>
+                <th>Statut</th>
+                <th>Détails</th>
+              </tr>
+            </thead>
+            <tbody id="audit-table-body">
+              <tr><td colspan="6" style="text-align: center;">Chargement des logs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Login Modal -->
+  <div id="modal-login" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">Connexion Administrateur</h3>
+      </div>
+      <div class="modal-body">
+        <form id="login-form" onsubmit="App.handleLogin(event); return false;">
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-size: 0.85rem; margin-bottom: 0.4rem; color: var(--text-secondary);">Identifiant :</label>
+            <input type="text" id="login-username" class="input-text" style="width: 100%;" value="admin" autocomplete="username" required />
+          </div>
+          <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; font-size: 0.85rem; margin-bottom: 0.4rem; color: var(--text-secondary);">Mot de passe :</label>
+            <input type="password" id="login-password" class="input-text" style="width: 100%;" autocomplete="current-password" required />
+          </div>
+          <div id="login-error" style="color: var(--danger); font-size: 0.85rem; margin-bottom: 1rem; min-height: 1.2rem;"></div>
+          <button type="submit" id="login-submit-btn" class="btn btn-primary" style="width: 100%; padding: 0.75rem;">Se connecter</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- SENSITIVE ACTION PASSWORD MODAL -->
+  <div id="sensitive-action-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span style="font-size: 1.2rem;">🔒</span>
+          <h3 class="modal-title" id="sensitive-modal-title">Action sensible</h3>
+        </div>
+        <button class="btn" onclick="App.closeSensitiveActionModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: rgba(218, 54, 51, 0.15); border: 1px solid var(--danger); border-radius: 6px; padding: 0.75rem; color: #ff7b72; font-size: 0.85rem; margin-bottom: 1rem;">
+          ⚠️ <strong>Confirmation de sécurité obligatoire</strong><br>
+          <span id="sensitive-modal-desc">-</span>
+        </div>
+        <div>
+          <label style="display: block; font-size: 0.85rem; margin-bottom: 0.4rem; color: var(--text-secondary);">
+            Confirmez votre identité en saisissant votre mot de passe administrateur :
+          </label>
+          <input type="password" id="sensitive-modal-password" class="input-text" style="width: 100%;" placeholder="Mot de passe administrateur..." />
+        </div>
+        <div id="sensitive-modal-error" style="color: var(--danger); font-size: 0.85rem; margin-top: 0.5rem; font-weight: 500;"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="App.closeSensitiveActionModal()">Annuler</button>
+        <button id="sensitive-modal-submit-btn" class="btn btn-danger">Confirmer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD MACHINE MODAL -->
+  <div id="modal-add-machine" class="modal-overlay" style="display: none;">
+    <div class="modal-card wide">
+      <div class="modal-header">
+        <h3 class="modal-title">Ajouter une machine distante</h3>
+        <button class="btn" onclick="Machines.closeAddModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="add-machine-form">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Nom convivial :</label>
+              <input type="text" id="add-machine-name" class="input-text" style="width: 100%;" placeholder="ex: Serveur Web Ubuntu" required />
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Adresse IP ou Hôte :</label>
+              <input type="text" id="add-machine-host" class="input-text" style="width: 100%;" placeholder="ex: 192.168.1.50" required />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Port SSH :</label>
+              <input type="number" id="add-machine-port" class="input-text" style="width: 100%;" value="22" required />
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Utilisateur SSH :</label>
+              <input type="text" id="add-machine-user" class="input-text" style="width: 100%;" value="root" required />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Type d'authentification :</label>
+              <select id="add-machine-authtype" class="input-text" style="width: 100%;" onchange="document.getElementById('group-pass').style.display = this.value === 'password' ? 'block' : 'none'; document.getElementById('group-key').style.display = this.value === 'key' ? 'block' : 'none';">
+                <option value="password">Mot de passe SSH</option>
+                <option value="key">Clé privée SSH (id_rsa)</option>
+              </select>
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Adresse MAC (pour Wake-on-LAN optionnel) :</label>
+              <input type="text" id="add-machine-mac" class="input-text" style="width: 100%;" placeholder="ex: AA:BB:CC:DD:EE:FF" />
+            </div>
+          </div>
+
+          <div id="group-pass" style="margin-bottom: 1.5rem;">
+            <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Mot de passe SSH :</label>
+            <input type="password" id="add-machine-pass" class="input-text" style="width: 100%;" placeholder="Mot de passe de la machine..." />
+          </div>
+
+          <div id="group-key" style="margin-bottom: 1.5rem; display: none;">
+            <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Contenu de la clé privée (PEM/OpenSSH) :</label>
+            <textarea id="add-machine-key" class="input-text" style="width: 100%; height: 100px; font-family: var(--font-mono);" placeholder="-----BEGIN OPENSSH PRIVATE KEY----- ..."></textarea>
+          </div>
+
+          <div class="modal-footer" style="padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <button type="button" class="btn" onclick="Machines.closeAddModal()">Annuler</button>
+            <button type="submit" class="btn btn-primary">Enregistrer la machine</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD CLOUDFLARE TUNNEL MODAL -->
+  <div id="modal-add-cf" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title">☁️ Nouveau Tunnel Cloudflare</h3>
+        <button class="btn" onclick="Tunnels.closeCloudflareModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-add-cf">
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Nom du tunnel :</label>
+            <input type="text" id="cf-name" class="input-text" style="width: 100%;" placeholder="ex: Mon API Web Node" required />
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Machine source du service :</label>
+            <select id="cf-machine-select" class="input-text" style="width: 100%;"></select>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Port local à exposer :</label>
+              <input type="number" id="cf-port" class="input-text" style="width: 100%;" placeholder="ex: 3000, 8080" required />
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Protocole :</label>
+              <select id="cf-proto" class="input-text" style="width: 100%;">
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+                <option value="tcp">TCP</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1.5rem;">
+            <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">
+              Jeton Cloudflare Tunnel (optionnel pour domaine fixe Zero Trust) :
+            </label>
+            <input type="text" id="cf-token" class="input-text" style="width: 100%; font-family: var(--font-mono); font-size: 0.8rem;" placeholder="Laisser vide pour une URL rapide *.trycloudflare.com gratuite" />
+          </div>
+
+          <div class="modal-footer" style="padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <button type="button" class="btn" onclick="Tunnels.closeCloudflareModal()">Annuler</button>
+            <button type="submit" class="btn btn-primary">Démarrer le tunnel Cloudflare</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADD AUTOSSH TUNNEL MODAL -->
+  <div id="modal-add-autossh" class="modal-overlay" style="display: none;">
+    <div class="modal-card wide">
+      <div class="modal-header">
+        <h3 class="modal-title">🔀 Nouveau Tunnel AutoSSH (Reverse Tunnel)</h3>
+        <button class="btn" onclick="Tunnels.closeAutoSshModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <form id="form-add-autossh">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Nom du tunnel :</label>
+              <input type="text" id="as-name" class="input-text" style="width: 100%;" placeholder="ex: Exposition API sur VPS OVH" required />
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Machine source du service :</label>
+              <select id="as-machine-select" class="input-text" style="width: 100%;"></select>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Port local du service :</label>
+              <input type="number" id="as-local-port" class="input-text" style="width: 100%;" placeholder="ex: 3000" required />
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Port d'écoute public sur le VPS :</label>
+              <input type="number" id="as-remote-port" class="input-text" style="width: 100%;" placeholder="ex: 8080 ou 443" required />
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Hôte VPS (IP ou Nom de domaine) :</label>
+              <input type="text" id="as-vps-host" class="input-text" style="width: 100%;" placeholder="ex: vps.mondomaine.com ou 51.x.x.x" required />
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Port SSH VPS :</label>
+              <input type="number" id="as-vps-port" class="input-text" style="width: 100%;" value="22" required />
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.85rem; margin-bottom: 0.3rem;">Utilisateur SSH :</label>
+              <input type="text" id="as-vps-user" class="input-text" style="width: 100%;" value="root" required />
+            </div>
+          </div>
+
+          <div style="margin-bottom: 1.5rem; display: flex; align-items: center; gap: 0.5rem;">
+            <input type="checkbox" id="as-bind-all" checked />
+            <label for="as-bind-all" style="font-size: 0.85rem; color: var(--text-secondary);">
+              Autoriser toutes les adresses IP externes à se connecter (GatewayPorts 0.0.0.0 sur le VPS)
+            </label>
+          </div>
+
+          <div class="modal-footer" style="padding-top: 1rem; border-top: 1px solid var(--border-color);">
+            <button type="button" class="btn" onclick="Tunnels.closeAutoSshModal()">Annuler</button>
+            <button type="submit" class="btn btn-primary">Démarrer le tunnel AutoSSH</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic Details / Log Viewer Modal -->
+  <div id="generic-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 class="modal-title" id="generic-modal-title">Détails</h3>
+        <button class="btn" onclick="App.closeModal()">✕</button>
+      </div>
+      <div class="modal-body" id="generic-modal-body"></div>
+      <div class="modal-footer">
+        <button class="btn" onclick="App.closeModal()">Fermer</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Vendor Scripts -->
+  <script src="/vendor/xterm/xterm.js"></script>
+  <script src="/vendor/xterm-addon-fit/addon-fit.js"></script>
+
+  <!-- Application Scripts -->
+  <script src="/js/auth.js"></script>
+  <script src="/js/machines.js"></script>
+  <script src="/js/tunnels.js"></script>
+  <script src="/js/dashboard.js"></script>
+  <script src="/js/terminal.js"></script>
+  <script src="/js/actions.js"></script>
+  <script src="/js/files.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
